@@ -1,479 +1,609 @@
 <html>
-
-<head>
+  <head>
     <title>Night Watch</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
+    />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-touch-fullscreen" content="yes" />
     <style>
-        html, body {margin: 0; padding: 0; width:100%; height:100%; overflow: hidden; position: fixed; }
-        canvas {
-            border: 1px solid rgb(199, 241, 237);
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 95vw;
-            height: 95vh;
-        }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        position: fixed;
+      }
+      canvas {
+        border: 1px solid rgb(199, 241, 237);
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 95vw;
+        height: 95vh;
+      }
 
-        #starsVideo {
-            position: fixed;
-            right: 0;
-            bottom: 0;
-            min-width: 100%;
-            min-height: 100%;
-            z-index: -100;
-        }
-
+      #starsVideo {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        min-width: 100%;
+        min-height: 100%;
+        z-index: -100;
+      }
     </style>
-    <script src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
+  </head>
 
-</head>
-
-<body onload="startGame()">
-
+  <body onload="startGame()">
     <video autoplay muted loop id="starsVideo">
-        <source src="stars.mp4" type="video/mp4">
+      <source src="stars.mp4" type="video/mp4" />
     </video>
 
-    <header style="text-align: center; font-size: bolder; color: rgb(199, 241, 237)">Night Watch</header>
+    <header
+      style="text-align: center; font-size: bolder; color: rgb(199, 241, 237)"
+    >
+      Night Watch
+    </header>
 
     <script>
-        //var myGamePiece;
-        let myUUID = uuidv4();
-        var gamePieces = {};
-        let myColor = getRandomColor();
-        var itUUID;
-        let imit = false;
-        let pieceWidth = 30;
-        let pieceHeight = 30;
-        let itfilla = '#aa0000';
-        let itfillb = '#99ff00';
-        var itfill = itfilla;
+      // Variables for the game.
+      //var myGamePiece;
+      var myUUID = uuidv4();
+      var gamePieces = {};
+      var zombiePiece = {};
+      var myColor = getRandomColor();
+      var itUUID;
+      var imit = false;
+      var pieceWidth = 30;
+      var pieceHeight = 30;
+      var itfilla = "#aa0000";
+      var itfillb = "#99ff00";
+      var itfill = itfilla;
+      let floor = { x: 0, y: 600, color: "#ff0000" };
 
-        // Decay should be higher than start
-        const bounceDecay = 1.05; // 1 or more: the higher, the less bounce; less than one adds infinite spring
-        const bounceStart = 1.05; // 1 or more; the higher, the more it should bounce
-        
+      //Change zombie spawn and add more zombies somehow
+      zombie = {
+        x: Math.random() * 1280 + 1,
+        y: Math.random() * 720 + 1,
+        w: 10,
+        h: 10,
+        health: 100,
+        direction: 0.5,
+        color: getRandomColor(),
+        speed: 1
+      };
 
-        var socket = io('//:3000') // for localhost testing
-     //var socket = io('https://nightwatch-server.now.sh')
-        socket.on('announce', () => {
-            //console.log("announce received")
-            var myGamePiece = gamePieces[myUUID];
-            socket.emit('move', {
-                uuid: myUUID,
-                x: myGamePiece.x,
-                y: myGamePiece.y,
-                speedX: myGamePiece.speedX,
-                speedY: myGamePiece.speedY,
-                color: myColor
-            });
-        })
-        socket.on('it', (data) => {
-            //console.log('Got it data: ', data)
-            itUUID = data.uuid;
-            if (itUUID == myUUID) { // I'm it!
-                imit = true;
-            } else {
-                imit = false;
-            }
-            let flashIt = setInterval( function() { changeItColor() }, 100);
-            setTimeout(function() { clearInterval(flashIt); itfill = itfilla; }, 3000);
-        })
+      // Zombie init
 
-        socket.on('moved', function (data) {
-            //console.log("move received:");
-            //console.log(data);
-            // This is where we parse the data object for the new box to draw
-            if (typeof gamePieces[data.uuid] != "undefined") {
-                gamePieces[data.uuid].x = data.x;
-                gamePieces[data.uuid].y = data.y;
-                gamePieces[data.uuid].speedX = data.speedX;
-                gamePieces[data.uuid].speedY = data.speedY;
-            } else {
-                gamePieces[data.uuid] = new component(pieceWidth, pieceHeight, data.color, data.x, data.y, data.speedX, data.speedY);
-            }
-            // socket.emit('moved')
+      // Decay should be higher than start
+      const bounceDecay = 1.05; // 1 or more: the higher, the less bounce; less than one adds infinite spring
+      const bounceStart = 1.05; // 1 or more; the higher, the more it should bounce
+
+      var socket = io("http://localhost:3000"); // for localhost testing
+      //var socket = io('https://nightwatch-server.now.sh')
+
+      // this gets who is it, announces it and tells everyone who has moved
+      // and checks if a player leaves the game
+
+      socket.on("announce", () => {
+        //console.log("announce received")
+        var myGamePiece = gamePieces[myUUID];
+        socket.emit("move", {
+          uuid: myUUID,
+          x: myGamePiece.x,
+          y: myGamePiece.y,
+          speedX: myGamePiece.speedX,
+          speedY: myGamePiece.speedY,
+          color: myColor
         });
-        socket.on('remove', function (data) {
-            // We should make some pretty animation here
-            if (typeof gamePieces[data.uuid] != 'undefined') {
-                delete gamePieces[data.uuid];
+      });
+      socket.emit("bigfloor", data => {
+        floor = data;
+      });
+
+      socket.emit("zombie", data => {
+        zombie = data;
+      });
+
+      socket.on("it", data => {
+        //console.log('Got it data: ', data)
+        itUUID = data.uuid;
+        if (itUUID == myUUID) {
+          // I'm it!
+          imit = true;
+        } else {
+          imit = false;
+        }
+        let flashIt = setInterval(function() {
+          changeItColor();
+        }, 100);
+        setTimeout(function() {
+          clearInterval(flashIt);
+          itfill = itfilla;
+        }, 3000);
+      });
+
+      socket.on("moved", function(data) {
+        // console.log("move received:");
+        // console.log(data);
+        // This is where we parse the data object for the new box to draw
+        if (typeof gamePieces[data.uuid] != "undefined") {
+          gamePieces[data.uuid].x = data.x;
+          gamePieces[data.uuid].y = data.y;
+          gamePieces[data.uuid].speedX = data.speedX;
+          gamePieces[data.uuid].speedY = data.speedY;
+        } else {
+          gamePieces[data.uuid] = new component(
+            pieceWidth,
+            pieceHeight,
+            data.color,
+            data.x,
+            data.y,
+            data.speedX,
+            data.speedY
+          );
+        }
+        // socket.emit('moved')
+      });
+
+      socket.on("remove", function(data) {
+        // We should make some pretty animation here
+        if (typeof gamePieces[data.uuid] != "undefined") {
+          delete gamePieces[data.uuid];
+        }
+      });
+
+      var myGameArea = {
+        canvas: document.createElement("canvas"),
+        start: function() {
+          this.canvas.width = 1280;
+          this.canvas.height = 720;
+          this.context = this.canvas.getContext("2d");
+          document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+          //document.body.style.backgroundImage = "url('https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/Hme4C4_7iosf3emf/stars-in-the-sky-looped-animation-beautiful-night-with-twinkling-flares-hd-1080_sr8wih9v__F0000.png')";
+          this.interval = setInterval(updateGameArea, getRandomInt(5, 1));
+          this.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
+          window.addEventListener("keydown", function(e) {
+            e.preventDefault();
+            myGameArea.keys = myGameArea.keys || [];
+            myGameArea.keys[e.keyCode] = true;
+          });
+          window.addEventListener("keyup", function(e) {
+            e.preventDefault();
+            myGameArea.keys = myGameArea.keys || [];
+            myGameArea.keys[e.keyCode] = false;
+          });
+
+          // EventListener to know when a key is pressed down.
+          // Also looks for mouse down and mouse up events
+          window.addEventListener("mousedown", function(e) {
+            e.preventDefault();
+            myGameArea.mouse = true;
+            myGameArea.mouseY = e.movementY;
+            myGameArea.mouseX = e.movementX;
+          });
+
+          window.addEventListener("mousemove", function(e) {
+            e.preventDefault();
+            // This prevents us from sending a "stopping" event, 0,0
+            // To make it allow for more angular movements,
+            // it would be good to keep the last three events and send
+            // the average down to the gameArea
+            if (e.movementY != 0 || e.movementX != 0) {
+              myGameArea.mouseY = e.movementY;
+              myGameArea.mouseX = e.movementX;
             }
-        })
+          });
 
+          window.addEventListener("mouseup", function(e) {
+            myGameArea.mouse = false;
+          });
 
+          window.addEventListener("mouseout", function(e) {
+            myGameArea.mouse = false;
+          });
+          window.addEventListener("touchstart", function(e) {
+            e.preventDefault();
+            myGameArea.touch = true;
+            myGameArea.touches = e.touches;
+            myGameArea.changedTouches = [];
+          });
+          window.addEventListener("touchmove", function(e) {
+            e.preventDefault();
+            myGameArea.touches = e.touches;
+            myGameArea.changedTouches = e.changedTouches;
+          });
+          window.addEventListener("touchend", function(e) {
+            myGameArea.touch = false;
+            myGameArea.touches = [];
+            myGameArea.changedTouches = [];
+          });
+        },
+        // refreshes the board.
+        clear: function() {
+          //this.canvas.height = this.canvas.clientHeight * 0.95;
+          //this.canvas.width = this.canvas.clientWidth * 0.95;
+          let width = this.canvas.width;
+          let height = this.canvas.height;
+          //console.log("w: " + width + " h: " + height);
+          this.context.clearRect(0, 0, width, height);
+        }
+      };
+      // This runs the refresh on the board over and over.
+      function updateRefresh() {
+        clearInterval(myGameArea.interval);
+        clearInterval(myGameArea.interval2);
+        myGameArea.interval = setInterval(updateGameArea, getRandomInt(5, 1));
+        myGameArea.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
+      }
+      // starting the game and puts in your gamePiece or gives you a new one
+      // Also emits that you have moved below telling everyone that you are moving.
+      function startGame() {
+        myGameArea.start();
+        gamePieces[myUUID] = new component(
+          pieceWidth,
+          pieceHeight,
+          myColor,
+          Math.random() * 1280 + 1,
+          Math.random() * 720 + 1
+        );
 
-        var myGameArea = {
-            canvas: document.createElement("canvas"),
-            start: function () {
-                this.canvas.width = 1280;
-                this.canvas.height = 720;
-                this.context = this.canvas.getContext("2d");
-                document.body.insertBefore(this.canvas, document.body.childNodes[0]);
-                //document.body.style.backgroundImage = "url('https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/Hme4C4_7iosf3emf/stars-in-the-sky-looped-animation-beautiful-night-with-twinkling-flares-hd-1080_sr8wih9v__F0000.png')";
-                this.interval = setInterval(updateGameArea, getRandomInt(5, 1));
-                this.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
-                window.addEventListener('keydown', function (e) {
-                    e.preventDefault();
-                    myGameArea.keys = (myGameArea.keys || []);
-                    myGameArea.keys[e.keyCode] = true;
-                    
-                })
-                window.addEventListener('keyup', function (e) {
-                    e.preventDefault();
-                    myGameArea.keys = (myGameArea.keys || []);
-                    myGameArea.keys[e.keyCode] = false;
-                })
+        socket.emit("move", {
+          uuid: myUUID,
+          x: gamePieces[myUUID].x,
+          y: gamePieces[myUUID].y,
+          speedX: gamePieces[myUUID].speedX,
+          speedY: gamePieces[myUUID].speedY,
+          color: myColor
+        });
+      }
+      // Tells you the size of the game piece for a circle and alo changes speed below
+      function component(width, height, color, x, y) {
+        this.width = width;
+        this.height = height;
+        this.radius = width / 2; // for circles
+        // Changes the speed you are repelled from another player
+        this.speedX = 0;
+        this.speedY = 0;
+        this.speedXDecay = 0;
+        this.speedYDecay = 0;
+        this.x = x;
+        this.y = y;
+        this.overlapping = true;
+        this.shipImage = new Image();
+        this.shipImage.src = "ship.png";
 
-                window.addEventListener('mousedown', function (e) {
-                    e.preventDefault();
-                    myGameArea.mouse = true;
-                    myGameArea.mouseY = e.movementY;
-                    myGameArea.mouseX = e.movementX;
-                })
+        // This changes the shape or design of the gamePiece.
+        this.update = function(it, itcolor) {
+          ctx = myGameArea.context;
 
-                window.addEventListener('mousemove', function (e) {
-                    e.preventDefault();
-                    // This prevents us from sending a "stopping" event, 0,0
-                    // To make it allow for more angular movements, 
-                    // it would be good to keep the last three events and send
-                    // the average down to the gameArea
-                    if (e.movementY != 0 || e.movementX != 0 ) {
-                        myGameArea.mouseY = e.movementY;
-                        myGameArea.mouseX = e.movementX;
-                    }
-                })
+          // A square
+          //ctx.fillRect(this.x, this.y, this.width, this.height);
 
-                window.addEventListener('mouseup', function(e) {
-                    myGameArea.mouse = false;
-                })
+          // A circle
+          let radius = this.radius;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, radius, 0, 2 * Math.PI);
+          ctx.fillStyle = color;
+          ctx.fill();
 
-                window.addEventListener('mouseout', function(e) {
-                    myGameArea.mouse = false;
-                })
-                window.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                    myGameArea.touch = true;
-                    myGameArea.touches = e.touches;
-                    myGameArea.changedTouches = [];
-                })
-                window.addEventListener('touchmove', function(e) {
-                    e.preventDefault();
-                    myGameArea.touches = e.touches;
-                    myGameArea.changedTouches = e.changedTouches;
-                })
-                window.addEventListener('touchend', function(e) {
-                    myGameArea.touch = false;
-                    myGameArea.touches = [];
-                    myGameArea.changedTouches = [];
-                })
-            },
-            clear: function () {
-                //this.canvas.height = this.canvas.clientHeight * 0.95;
-                //this.canvas.width = this.canvas.clientWidth * 0.95;
-                let width = this.canvas.width;
-                let height = this.canvas.height;
-                //console.log("w: " + width + " h: " + height);
-                this.context.clearRect(0, 0, width, height);
+          // A ship
+          // ctx.drawImage(
+          //   this.shipImage,
+          //   0,
+          //   0,
+          //   this.shipImage.width,
+          //   this.shipImage.height,
+          //   this.x,
+          //   this.y,
+          //   this.width,
+          //   this.height
+          // );
+
+          // This changes the color of who is it.
+          if (it) {
+            // This gives us a square
+
+            ctx.fillStyle = itcolor;
+            let ptf = 5;
+
+            // A circle in the middle
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, ptf, 0, 2 * Math.PI);
+            ctx.fill();
+            // A square in the middle
+            //ctx.fillRect(this.x + (pieceWidth / ptf), this.y + (pieceHeight / ptf), this.width - ((
+            //    pieceWidth / ptf) * 2), this.height - ((pieceWidth / ptf) * 2));
+
+            /* This creates a hole in the ship */
+            /*
+                          ctx.globalCompositeOperation = 'destination-out'
+                          ctx.arc(this.x + width/2, this.y + height/2, 10, 0, 2*Math.PI)
+                          ctx.fill()
+                          */
+          }
+        };
+
+        // This tells the game you are moving or if you are not moving
+        //It also gets your X and Y position on the canvas
+        this.newPos = function() {
+          if (this.x + this.speedX + pieceWidth < 0) {
+            this.x += myGameArea.canvas.width + pieceWidth;
+          } else if (this.x + this.speedX > myGameArea.canvas.width) {
+            this.x -= myGameArea.canvas.width + pieceWidth;
+          } else {
+            this.x += this.speedX;
+          }
+          if (this.y + this.speedY + pieceHeight < 0) {
+            this.y += myGameArea.canvas.height + pieceHeight;
+          } else if (this.y + this.speedY > myGameArea.canvas.height) {
+            this.y -= myGameArea.canvas.height + pieceHeight;
+          } else {
+            this.y += this.speedY;
+          }
+          // Emits that you are moving again.
+          socket.emit("move", {
+            uuid: myUUID,
+            x: this.x,
+            y: this.y,
+            speedX: this.speedX,
+            speedY: this.speedY,
+            color: myColor
+          });
+        };
+      }
+
+      // This is where the game is updated for every action in the game.
+      // It will redraw gamePieces to match the place they are.
+      function updateGameArea() {
+        myGameArea.clear();
+        var myGamePiece = gamePieces[myUUID];
+        if (myGameArea.mouse) {
+          let mouseX = myGameArea.mouseX;
+          let mouseY = myGameArea.mouseY;
+          //console.log("X "+mouseX + " Y " + mouseY)
+
+          if (mouseX > 0) {
+            myGamePiece.speedX = 1;
+          } else if (mouseX < 0) {
+            myGamePiece.speedX = -1;
+          } else {
+            myGamePiece.speedX = 0;
+          }
+
+          if (mouseY > 0) {
+            myGamePiece.speedY = 1;
+          } else if (mouseY < 0) {
+            myGamePiece.speedY = -1;
+          } else {
+            myGamePiece.speedY = 0;
+          }
+
+          // end mouse movement checks
+        } else if (myGameArea.touch) {
+          let changedTouches = myGameArea.changedTouches;
+          let oldTouchSpot = myGameArea.oldTouchSpot || changedTouches[0];
+          let touch = changedTouches[0];
+          let diffX = touch.pageX - oldTouchSpot.pageX;
+          let diffY = touch.pageY - oldTouchSpot.pageY;
+          myGameArea.oldTouchSpot = changedTouches[0];
+
+          if (diffX != 0 || diffY != 0) {
+            if (diffX > 0) {
+              myGamePiece.speedX = 1;
+            } else if (diffX < 0) {
+              myGamePiece.speedX = -1;
+            } else {
+              myGamePiece.speedX = 0;
             }
+
+            if (diffY > 0) {
+              myGamePiece.speedY = 1;
+            } else if (diffY < 0) {
+              myGamePiece.speedY = -1;
+            } else {
+              myGamePiece.speedY = 0;
+            }
+          }
+        } else {
+          myGamePiece.speedX = 0;
+          myGamePiece.speedY = 0;
+
+          if (myGameArea.keys && myGameArea.keys[37]) {
+            myGamePiece.speedX = -1;
+          }
+          if (myGameArea.keys && myGameArea.keys[39]) {
+            myGamePiece.speedX = 1;
+          }
+          if (myGameArea.keys && myGameArea.keys[38]) {
+            myGamePiece.speedY = -1;
+          }
+          if (myGameArea.keys && myGameArea.keys[40]) {
+            myGamePiece.speedY = 1;
+          }
+          // end keypress checks
         }
 
-        function updateRefresh() {
-            clearInterval(myGameArea.interval);
-            clearInterval(myGameArea.interval2);
-            myGameArea.interval = setInterval(updateGameArea, getRandomInt(5, 1));
-            myGameArea.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
+        // The divisor also helps determine how bouncy it is
+
+        myGamePiece.speedXDecay =
+          Math.abs(myGamePiece.speedXDecay) < 0.01
+            ? 0
+            : myGamePiece.speedXDecay / bounceDecay;
+        myGamePiece.speedYDecay =
+          Math.abs(myGamePiece.speedYDecay) < 0.01
+            ? 0
+            : myGamePiece.speedYDecay / bounceDecay;
+
+        myGamePiece.speedX += myGamePiece.speedXDecay;
+        myGamePiece.speedY += myGamePiece.speedYDecay;
+
+        if (myGamePiece.speedX != 0 || myGamePiece.speedY != 0) {
+          myGamePiece.newPos();
         }
 
-        function startGame() {
-            myGameArea.start();
-            gamePieces[myUUID] = new component(pieceWidth, pieceHeight, myColor, 595, 20);
-            socket.emit('move', {
-                uuid: myUUID,
-                x: gamePieces[myUUID].x,
-                y: gamePieces[myUUID].y,
-                speedX: gamePieces[myUUID].speedX,
-                speedY: gamePieces[myUUID].speedY,
-                color: myColor
-            });
-        }
-
-        function component(width, height, color, x, y) {
-            this.width = width;
-            this.height = height;
-            this.radius = width/2; // for circles
-            this.speedX = 0;
-            this.speedY = 0;
-            this.speedXDecay = 0;
-            this.speedYDecay = 0;
-            this.x = x;
-            this.y = y;
-            this.overlapping = false;
-            this.shipImage = new Image();
-            this.shipImage.src = 'ship.jpg';
-            this.update = function (it,itcolor) {
-                ctx = myGameArea.context;
-
-                // A square
-                //ctx.fillRect(this.x, this.y, this.width, this.height);
-
-                // A circle
-                let radius = this.radius;
-                ctx.beginPath();
-                ctx.arc(this.x,this.y,radius,0,2*Math.PI)
-                ctx.fillStyle = color;
-                ctx.fill();
-
-                // A ship
-                //ctx.drawImage(this.shipImage, 0, 0, this.shipImage.width, this.shipImage.height,this.x, this.y, this.width, this.height);
-
-                if (it) {
-
-                    // This gives us a square
-                    
-                    ctx.fillStyle = itcolor;
-                    let ptf = 5;
-                    
-                    // A circle in the middle
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, ptf, 0, 2*Math.PI)
-                    ctx.fill();
-                    // A square in the middle
-                    //ctx.fillRect(this.x + (pieceWidth / ptf), this.y + (pieceHeight / ptf), this.width - ((
-                    //    pieceWidth / ptf) * 2), this.height - ((pieceWidth / ptf) * 2));
-
-                        
-                    /* This creates a hole in the ship */
-                    /*
-                    ctx.globalCompositeOperation = 'destination-out'
-                    ctx.arc(this.x + width/2, this.y + height/2, 10, 0, 2*Math.PI)
-                    ctx.fill()
-                    */
-
-                }
-            }
-            this.newPos = function () {
-                if (this.x + this.speedX + pieceWidth < 0 ) {
-                    this.x += myGameArea.canvas.width + pieceWidth;
-                } else if (this.x + this.speedX > myGameArea.canvas.width) {
-                    this.x -= myGameArea.canvas.width + pieceWidth;
-                } else {
-                    this.x += this.speedX;
-                }
-                if (this.y + this.speedY + pieceHeight < 0) {
-                    this.y += myGameArea.canvas.height + pieceHeight;
-                } else if (this.y + this.speedY > myGameArea.canvas.height) {
-                    this.y -= myGameArea.canvas.height  + pieceHeight;
-                } else {
-                    this.y += this.speedY;
-                }
-
-                socket.emit('move', {
-                    uuid: myUUID,
-                    x: this.x,
-                    y: this.y,
-                    speedX: this.speedX,
-                    speedY: this.speedY,
-                    color: myColor
+        for (var uuid in gamePieces) {
+          if (uuid != myUUID) {
+            if (checkOverlap(myGamePiece, gamePieces[uuid])) {
+              myGamePiece.newPos();
+              //console.log('overlap! ' + myUUID + " - " + uuid);
+              if (imit && !myGamePiece.overlap) {
+                socket.emit("tagged", {
+                  olduuid: myUUID,
+                  newuuid: uuid
                 });
-            }
-        }
+              }
 
-        function updateGameArea() {
-            myGameArea.clear();
-            var myGamePiece = gamePieces[myUUID];
-            
-            if (myGameArea.mouse) {
-
-                let mouseX = myGameArea.mouseX
-                let mouseY = myGameArea.mouseY
-                //console.log("X "+mouseX + " Y " + mouseY)
-
-                    if (mouseX > 0) {
-                        myGamePiece.speedX = 1;
-                    } else if (mouseX < 0) {
-                        myGamePiece.speedX = -1;
-                    } else { myGamePiece.speedX = 0 }
-                
-                    if (mouseY > 0) {
-                        myGamePiece.speedY = 1;
-                    } else if (mouseY < 0 ) {
-                        myGamePiece.speedY = -1;
-                    } else { myGamePiece.speedY = 0 }
-
-                // end mouse movement checks
-            } else if (myGameArea.touch) {
-                let changedTouches = myGameArea.changedTouches
-                let oldTouchSpot = (myGameArea.oldTouchSpot || changedTouches[0]);
-                let touch = changedTouches[0]
-                let diffX = touch.pageX - oldTouchSpot.pageX
-                let diffY = touch.pageY - oldTouchSpot.pageY
-                myGameArea.oldTouchSpot = changedTouches[0]
-
-                if (diffX != 0 || diffY != 0) {
-                    if (diffX > 0) {
-                        myGamePiece.speedX = 1; 
-                    } else if (diffX < 0) {
-                        myGamePiece.speedX = -1;
-                    }  else { myGamePiece.speedX = 0}
-
-                    if (diffY > 0 ){
-                       myGamePiece.speedY = 1;
-                    } else if (diffY < 0) {
-                        myGamePiece.speedY = -1;
-                    } else { myGamePiece.speedY = 0 }
-                }
-
+              myGamePiece.overlap = true;
             } else {
-                myGamePiece.speedX = 0;
-                myGamePiece.speedY = 0;
-
-            if (myGameArea.keys && myGameArea.keys[37]) {
-                myGamePiece.speedX = -1;
-            } 
-            if (myGameArea.keys && myGameArea.keys[39]) {
-                myGamePiece.speedX = 1;
+              myGamePiece.overlap = false;
             }
-            if (myGameArea.keys && myGameArea.keys[38]) {
-                myGamePiece.speedY = -1;
-            }
-            if (myGameArea.keys && myGameArea.keys[40]) {
-                myGamePiece.speedY = 1;
-            }
-            // end keypress checks
-            }
+          }
+          gamePieces[uuid].update(uuid == itUUID, itfill);
+          // Draw floor
+          ctx.fillStyle = floor.color;
+          ctx.fillRect(floor.x, floor.y, 1000, 50);
 
-            /*
-            if (myGamePiece.speedXDecay < 0) { myGamePiece.speedXDecay = myGamePiece.speedXDecay/2 } 
-            else if (myGamePiece.speedXDecay > 0) { myGamePiece.speedXDecay -= myGamePiece.speedXDecay/2 }
-            if (myGamePiece.speedYDecay < 0) { myGamePiece.speedYDecay += myGamePiece.speedXDecay/2 } 
-            else if (myGamePiece.speedYDecay > 0) { myGamePiece.speedYDecay -= myGamePiece.speedXDecay/2 }
-            */
+          ctx.fillRect(zombie.x, zombie.y, 50, 50);
+          ctx.fillRect(zombie.x, zombie.y, 70, 50);
 
-            // The divisor also helps determine how bouncy it is
-
-            myGamePiece.speedXDecay = Math.abs(myGamePiece.speedXDecay) < 0.01 ? 0 : myGamePiece.speedXDecay / bounceDecay
-            myGamePiece.speedYDecay = Math.abs(myGamePiece.speedYDecay) < 0.01 ? 0 : myGamePiece.speedYDecay / bounceDecay
-
-            myGamePiece.speedX += myGamePiece.speedXDecay
-            myGamePiece.speedY += myGamePiece.speedYDecay
-
-            if (myGamePiece.speedX != 0 || myGamePiece.speedY != 0) {
-                myGamePiece.newPos()
-            } 
-
-            for (var uuid in gamePieces) {
-                if (uuid != myUUID) {
-                    if (checkOverlap(myGamePiece, gamePieces[uuid])) {
-                        myGamePiece.newPos()
-                        //console.log('overlap! ' + myUUID + " - " + uuid);
-                        if (imit && !myGamePiece.overlap) {
-                        socket.emit('tagged', {
-                            olduuid: myUUID,
-                            newuuid: uuid
-                         })
-                        } 
-                        
-                        myGamePiece.overlap = true;
-                    } else {
-                        myGamePiece.overlap = false;
-                    }
-                }
-                gamePieces[uuid].update(uuid == itUUID,itfill);
-            }
+          if (gamePieces[itUUID].x > zombie.x) {
+            zombie.x = zombie.x + zombie.speed;
+          }
+          if (gamePieces[itUUID].y > zombie.y) {
+            zombie.y = zombie.y + zombie.speed;
+          }
+          if (gamePieces[itUUID].x < zombie.x) {
+            zombie.x = zombie.x - zombie.speed;
+          }
+          if (gamePieces[itUUID].y < zombie.y) {
+            zombie.y = zombie.y - zombie.speed;
+          }
         }
 
-        function changeItColor() {
-            if (itfill === itfilla) {
-                itfill = itfillb;
-            } else {
-                itfill = itfilla;
-            }
+        // if (zom.x > myGamePiece.x) {
+        //   zom.x =
+        //     zom.x - myGamePiece.x < zom.speed
+        //       ? zom.x - (zom.x - myGamePiece.x)
+        //       : zom.x - zom.speed;
+        // } else {
+        //   zom.x =
+        //     myGamePiece.x - zom.x < zom.speed
+        //       ? zom.x + (myGamePiece.x - zom.x)
+        //       : zom.x + zom.speed;
+        // }
+        // if (zom.y > myGamePiece.x) {
+        //   zom.y =
+        //     zom.y - myGamePiece.y < zom.speed
+        //       ? zom.y - (zom.y - myGamePiece.y)
+        //       : zom.y - zom.speed;
+        // } else {
+        //   zom.y =
+        //     myGamePiece.y - zom.y < zom.speed
+        //       ? zom.y + (myGamePiece.y - zom.y)
+        //       : zom.y + zom.speed;
+        // }
+      }
+
+      // This changes the color of the itPerson and their fill color.
+      function changeItColor() {
+        if (itfill === itfilla) {
+          itfill = itfillb;
+        } else {
+          itfill = itfilla;
         }
+      }
+      // Checks if your gamePiece has overlapped another gamePiece
+      // Changes who is it up above if one of you is it and has tagged a new player.
+      function checkOverlap(piece1, piece2) {
+        // This is for square collision detection
 
-        function checkOverlap(piece1, piece2) {
+        //console.log("checking for overlap")
+        /*
+                  if (piece1.x > piece2.x + pieceWidth || piece2.x > piece1.x + pieceWidth) {
+                      //console.log("no overlap side-to-side");
+                      return false;
+                  }
+                  if (piece1.y > piece2.y + pieceHeight || piece2.y > piece1.y + pieceHeight) {
+                      //console.log("no overlap top-to-bottom")
+                      return false;
+                  }
+                  return true;
+                  */
+        // This is for circle collision detection
 
-            // This is for square collision detection
+        let dx = piece1.x - piece2.x;
+        let dy = piece1.y - piece2.y;
+        let dx2 = piece2.x - piece1.x;
+        let dy2 = piece2.y - piece1.y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < piece1.radius + piece2.radius) {
+          let atan1 = Math.atan2(dy, dx);
+          let p1deg = ((atan1 * 180) / Math.PI + 360 + 270) % 360;
+          console.log("Piece 1 loc, angle (deg): ", dx, dy, p1deg);
+          let atan2 = Math.atan2(dy2, dx2);
+          let p2deg = ((atan2 * 180) / Math.PI + 360 + 270) % 360;
+          console.log("Piece 2 loc, angle (deg): ", dx2, dy2, p2deg);
 
-            //console.log("checking for overlap")
-            /*
-            if (piece1.x > piece2.x + pieceWidth || piece2.x > piece1.x + pieceWidth) {
-                //console.log("no overlap side-to-side");
-                return false;
-            }
-            if (piece1.y > piece2.y + pieceHeight || piece2.y > piece1.y + pieceHeight) {
-                //console.log("no overlap top-to-bottom")
-                return false;
-            }
-            return true;
-            */
-            // This is for circle collision detection
+          let xAvg = (Math.abs(piece1.speedX) + Math.abs(piece2.speedX)) / 2;
+          let yAvg = (Math.abs(piece1.speedY) + Math.abs(piece2.speedY)) / 2;
 
-            let dx = piece1.x - piece2.x
-            let dy = piece1.y - piece2.y
-            let dx2 = piece2.x - piece1.x
-            let dy2 = piece2.y - piece1.y
-            let distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < piece1.radius + piece2.radius)  {
-                let atan1 = Math.atan2(dy,dx)
-                let p1deg = ((atan1 * 180 / Math.PI) + 360 + 270) % 360
-                console.log("Piece 1 loc, angle (deg): ", dx, dy,  p1deg)
-                let atan2 = Math.atan2(dy2,dx2)
-                let p2deg = ((atan2 * 180 / Math.PI) + 360 + 270) % 360
-                console.log("Piece 2 loc, angle (deg): ", dx2, dy2, p2deg)
+          console.log("Averages: ", xAvg, yAvg);
+          /*
+                      piece1.speedX = piece1.speedX == 0 ? Math.sign(dx * -1) : piece1.speedX
+                      piece1.speedY = piece1.speedY == 0 ? Math.sign(dy) : piece1.speedY
+                      */
 
-                let xAvg = (Math.abs(piece1.speedX) + Math.abs(piece2.speedX)) / 2
-                let yAvg = (Math.abs(piece1.speedY) + Math.abs(piece2.speedY)) / 2
+          // Avg = cuts speed in half
+          // sign = direction of travel
+          // sign * x = x is bounciness
+          // Add sign again to keep from overlapping
+          piece1.speedXDecay =
+            xAvg * Math.sign(dx) * bounceStart + Math.sign(dx);
+          piece1.speedYDecay =
+            yAvg * Math.sign(dy) * bounceStart + Math.sign(dy);
 
-                console.log("Averages: ", xAvg, yAvg)
-                /*
-                piece1.speedX = piece1.speedX == 0 ? Math.sign(dx * -1) : piece1.speedX
-                piece1.speedY = piece1.speedY == 0 ? Math.sign(dy) : piece1.speedY
-                */
-               
-                // Avg = cuts speed in half
-                // sign = direction of travel
-                // sign * x = x is bounciness
-                // Add sign again to keep from overlapping
-                 piece1.speedXDecay =  xAvg  * Math.sign(dx) * bounceStart + Math.sign(dx)
-                 piece1.speedYDecay =  yAvg  * Math.sign(dy) * bounceStart + Math.sign(dy)
-               
-                console.log("Speed Decay: ", parseFloat(piece1.speedXDecay), parseFloat(piece1.speedYDecay))
-                return true
-            } else { 
-                return false
-            }
+          console.log(
+            "Speed Decay: ",
+            parseFloat(piece1.speedXDecay),
+            parseFloat(piece1.speedYDecay)
+          );
+          return true;
+        } else {
+          return false;
         }
-
-
-        function uuidv4() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = Math.random() * 16 | 0,
-                    v = c == 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
+      }
+      // gets a random UUID for each person who is connected
+      function uuidv4() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(
+          c
+        ) {
+          var r = (Math.random() * 16) | 0,
+            v = c == "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      }
+      // gives you a random color.
+      function getRandomColor() {
+        var letters = "0123456789ABCDEF";
+        var color = "#";
+        for (var i = 0; i < 6; i++) {
+          color += letters[Math.floor(Math.random() * 16)];
         }
-
-        function getRandomColor() {
-            var letters = '0123456789ABCDEF';
-            var color = '#';
-            for (var i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
+        return color;
+      }
+      // gets a random number
+      function getRandomInt(max, min) {
+        if (min == null || min == undefined) {
+          min = 0;
         }
-
-        function getRandomInt(max, min) {
-            if (min == null || min == undefined) {
-                min = 0
-            }
-            return Math.floor(Math.random() * Math.floor(max - min) + min)
-        }
+        return Math.floor(Math.random() * Math.floor(max - min) + min);
+      }
     </script>
-
-</body>
-
+  </body>
 </html>
